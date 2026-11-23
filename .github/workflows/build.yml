@@ -12,25 +12,13 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Install Basic Dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y clang lld cmake make wget unzip zip libicu-dev
-
-      - name: Install .NET SDK
+      - name: Install .NET SDK (for Packaging)
         run: |
           wget https://dot.net/v1/dotnet-install.sh -O dotnet-install.sh
           chmod +x dotnet-install.sh
           ./dotnet-install.sh --channel 8.0
           echo "$HOME/.dotnet" >> $GITHUB_PATH
           echo "DOTNET_ROOT=$HOME/.dotnet" >> $GITHUB_ENV
-
-      - name: Download OpenOrbis Toolchain
-        run: |
-          # Using v0.5.3 which still has the Linux tarball
-          wget https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain/releases/download/v0.5.3/toolchain-linux.tar.gz
-          tar -xzf toolchain-linux.tar.gz
-          echo "OO_PS4_TOOLCHAIN=$PWD/toolchain" >> $GITHUB_ENV
 
       - name: Create C Source
         run: |
@@ -120,7 +108,11 @@ jobs:
               return 0;
           }
           EOF
-          $OO_PS4_TOOLCHAIN/bin/orbis-clang pkg_vault.c -o pkg_vault.elf -lSceAppInstUtil -lSceSystemService -lSceKernel
+
+      - name: Compile C Code using Docker
+        run: |
+          # Use the official community docker image that has all the toolchains pre-installed
+          docker run --rm -v "$PWD":/src -w /src openorbis/toolchain:latest orbis-clang pkg_vault.c -o pkg_vault.elf -lSceAppInstUtil -lSceSystemService -lSceKernel
 
       - name: Build PKG Structure
         run: |
@@ -130,7 +122,6 @@ jobs:
 
       - name: Package FPKG (Using LibOrbisPkg)
         run: |
-          # LibOrbisPkg uses .tar.gz now, we extract it directly
           wget https://github.com/maxton/LibOrbisPkg/releases/latest/download/LibOrbisPkg.Cli-linux-x64.tar.gz
           mkdir liborbis
           tar -xzf LibOrbisPkg.Cli-linux-x64.tar.gz -C liborbis
