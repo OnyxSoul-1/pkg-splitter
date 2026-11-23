@@ -12,6 +12,26 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
+      - name: Install Build Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang lld cmake make git libicu-dev wget
+
+      - name: Clone and Build OpenOrbis Toolchain
+        run: |
+          # Clone the official repository
+          git clone --depth 1 https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain.git /tmp/toolchain-src
+          cd /tmp/toolchain-src
+          
+          # Build the toolchain from source
+          mkdir build && cd build
+          cmake ..
+          make -j$(nproc)
+          
+          # Set environment variables for the next steps
+          echo "OO_PS4_TOOLCHAIN=/tmp/toolchain-src" >> $GITHUB_ENV
+          echo "/tmp/toolchain-src/bin" >> $GITHUB_PATH
+
       - name: Create C Source
         run: |
           cat << 'EOF' > pkg_vault.c
@@ -101,27 +121,14 @@ jobs:
           }
           EOF
 
-      - name: Compile with Official Docker Image
+      - name: Compile C Code
         run: |
-          docker run --rm --user $(id -u):$(id -g) -v "$(pwd)":/workspace -w /workspace openorbisofficial/toolchain:latest bash -c '
-            # Automatically find where orbis-clang is hiding in the image
-            BIN_PATH=$(find / -type f -name "orbis-clang" 2>/dev/null | head -n 1 | xargs dirname 2>/dev/null)
-            if [ -z "$BIN_PATH" ]; then
-              echo "Error: Could not find orbis-clang in the container!"
-              exit 1
-            fi
-            echo "Found orbis-clang at: $BIN_PATH"
-            export PATH=$PATH:$BIN_PATH
-            
-            orbis-clang pkg_vault.c -o pkg_vault.elf -lSceAppInstUtil -lSceSystemService -lSceKernel
-          '
+          orbis-clang pkg_vault.c -o pkg_vault.elf -lSceAppInstUtil -lSceSystemService -lSceKernel
 
       - name: Build PKG Structure
         run: |
           mkdir -p pkg_build/sce_sys
           cp pkg_vault.elf pkg_build/eboot.bin
-          
-          # Create a valid minimal param.sfo using Python so LibOrbisPkg accepts it
           python3 -c "import struct; f=open('pkg_build/sce_sys/param.sfo', 'wb'); f.write(b'\x00PSF' + struct.pack('<I', 0x01010000) + struct.pack('<I', 20) + struct.pack('<I', 20) + struct.pack('<I', 0)); f.close()"
 
       - name: Setup .NET
