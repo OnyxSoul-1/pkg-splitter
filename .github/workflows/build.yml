@@ -12,14 +12,23 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Install Dependencies
+      - name: Install Basic Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y clang lld cmake make wget unzip zip dotnet-sdk-8.0
+          sudo apt-get install -y clang lld cmake make wget unzip zip libicu-dev
+
+      - name: Install .NET SDK
+        run: |
+          # Install .NET 8.0 using the official Microsoft script
+          wget https://dot.net/v1/dotnet-install.sh -O dotnet-install.sh
+          chmod +x dotnet-install.sh
+          ./dotnet-install.sh --channel 8.0
+          # Add dotnet to PATH for the rest of the job
+          echo "$HOME/.dotnet" >> $GITHUB_PATH
+          echo "DOTNET_ROOT=$HOME/.dotnet" >> $GITHUB_ENV
 
       - name: Download OpenOrbis Toolchain
         run: |
-          # Fetch the latest release dynamically to avoid 404s
           wget https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain/releases/latest/download/toolchain-linux.tar.gz
           tar -xzf toolchain-linux.tar.gz
           echo "OO_PS4_TOOLCHAIN=$PWD/toolchain" >> $GITHUB_ENV
@@ -124,12 +133,10 @@ jobs:
 
       - name: Package FPKG (Using LibOrbisPkg)
         run: |
-          # Download LibOrbisPkg (a reliable cross-platform PKG builder)
           wget https://github.com/maxton/LibOrbisPkg/releases/latest/download/LibOrbisPkg.Cli-linux-x64.zip
           unzip LibOrbisPkg.Cli-linux-x64.zip -d liborbis
           chmod +x liborbis/PkgEditor
           
-          # Generate a GP4 project file
           cat << 'EOF' > project.gp4
           <?xml version="1.0" encoding="utf-8"?>
           <psproject fmt="gp4" version="1000">
@@ -147,7 +154,6 @@ jobs:
           </psproject>
           EOF
 
-          # Build the PKG from the GP4
           ./liborbis/PkgEditor build -g project.gp4 -o final.pkg --passcode 00000000000000000000000000000000 --content-id UP0000-CUSA00000_00-PKGVAULT0000000
 
       - name: Upload PKG Artifact
