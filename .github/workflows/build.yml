@@ -15,21 +15,30 @@ jobs:
       - name: Install Build Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y clang lld cmake make git libicu-dev wget python3
+          sudo apt-get install -y clang lld cmake make git libicu-dev wget python3 libclang-dev llvm-dev
 
       - name: Clone and Build OpenOrbis Toolchain
         run: |
-          # Clone the repository into the workspace
           git clone --depth 1 https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain.git toolchain-src
           cd toolchain-src
+          mkdir -p build
+          cd build
+          cmake ..
+          make -j$(nproc)
+          cd ..
           
-          # Run the official build script
-          chmod +x build.sh
-          ./build.sh
+          # Automatically find where the compiler was built
+          BIN_PATH=$(find . -name "orbis-clang" -type f | head -n 1)
+          if [ -z "$BIN_PATH" ]; then
+            echo "Build failed: orbis-clang not found."
+            exit 1
+          fi
+          BIN_DIR=$(dirname "$BIN_PATH")
+          echo "Toolchain binary found in: $BIN_DIR"
           
-          # Export the path so the next steps can find the compiler
-          echo "OO_PS4_TOOLCHAIN=$PWD" >> $GITHUB_ENV
-          echo "$PWD/bin" >> $GITHUB_PATH
+          # Export to the environment for the next steps
+          echo "OO_PS4_TOOLCHAIN=$(pwd)" >> $GITHUB_ENV
+          echo "$(pwd)/$BIN_DIR" >> $GITHUB_PATH
 
       - name: Create C Source
         run: |
