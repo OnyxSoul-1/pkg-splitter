@@ -12,26 +12,6 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Install Basic Dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y clang lld cmake make wget unzip zip libicu-dev
-
-      - name: Install .NET SDK
-        run: |
-          wget https://dot.net/v1/dotnet-install.sh -O dotnet-install.sh
-          chmod +x dotnet-install.sh
-          ./dotnet-install.sh --channel 8.0
-          echo "$HOME/.dotnet" >> $GITHUB_PATH
-          echo "DOTNET_ROOT=$HOME/.dotnet" >> $GITHUB_ENV
-
-      - name: Download OpenOrbis Toolchain (Backporter Fork)
-        run: |
-          # Download from a fork that still hosts the Linux toolchain binary
-          wget https://github.com/backporter/OpenOrbis-PS4-Toolchain/releases/download/v0.5.2/toolchain-linux.tar.gz
-          tar -xzf toolchain-linux.tar.gz
-          echo "OO_PS4_TOOLCHAIN=$PWD/toolchain" >> $GITHUB_ENV
-
       - name: Create C Source
         run: |
           cat << 'EOF' > pkg_vault.c
@@ -121,15 +101,22 @@ jobs:
           }
           EOF
 
-      - name: Compile C Code
-        run: |
-          $OO_PS4_TOOLCHAIN/bin/orbis-clang pkg_vault.c -o pkg_vault.elf -lSceAppInstUtil -lSceSystemService -lSceKernel
+      - name: Compile with OpenOrbis Action
+        uses: OpenOrbis/toolchain-action@main
+        with:
+          version: latest
+          command: orbis-clang pkg_vault.c -o pkg_vault.elf -lSceAppInstUtil -lSceSystemService -lSceKernel
 
       - name: Build PKG Structure
         run: |
           mkdir -p pkg_build/sce_sys
           cp pkg_vault.elf pkg_build/eboot.bin
           printf '\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00' > pkg_build/sce_sys/param.sfo
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
 
       - name: Package FPKG (Using LibOrbisPkg)
         run: |
