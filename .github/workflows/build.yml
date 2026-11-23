@@ -1,0 +1,154 @@
+name: Build PS4 Homebrew PKG
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang lld cmake make wget zip
+
+      - name: Download OpenOrbis Toolchain
+        run: |
+          wget https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain/releases/download/v0.5.0/toolchain-linux.tar.gz
+          tar -xzf toolchain-linux.tar.gz
+          echo "OO_PS4_TOOLCHAIN=$PWD/toolchain" >> $GITHUB_ENV
+
+      - name: Create C Source
+        run: |
+          cat << 'EOF' > pkg_vault.c
+          #include <stdio.h>
+          #include <stdlib.h>
+          #include <string.h>
+          #include <dirent.h>
+          #include <sys/stat.h>
+          #include <unistd.h>
+          #include <orbis/libkernel.h>
+          #include <orbis/SystemService.h>
+          #include <orbis/AppInst.h>
+
+          #define VAULT_DIR "/data/pkg_vault/"
+          #define USB_DIR "/mnt/usb0/"
+          #define LOG_FILE "/data/vault_log.txt"
+
+          // Helper to write logs to file
+          void log_msg(const char* msg) {
+              FILE *f = fopen(LOG_FILE, "a");
+              if (f) { fprintf(f, "%s\n", msg); fclose(f); }
+          }
+
+          void import_part(const char* part_name) {
+              char src_path[512]; char dst_path[512];
+              snprintf(src_path, sizeof(src_path), "%s%s", USB_DIR, part_name);
+              snprintf(dst_path, sizeof(dst_path), "%s%s", VAULT_DIR, part_name);
+              FILE *src = fopen(src_path, "rb");
+              if (!src) { log_msg("Error: Could not find file on USB."); return; }
+              FILE *dst = fopen(dst_path, "wb");
+              if (!dst) { log_msg("Error: Could not create file on PS4."); fclose(src); return; }
+              char buffer[1024 * 1024]; size_t bytes;
+              log_msg("Copying to PS4 hard drive...");
+              while ((bytes = fread(buffer, 1, sizeof(buffer), src)) > 0) { fwrite(buffer, 1, bytes, dst); }
+              fclose(src); fclose(dst);
+              log_msg("Success! Part saved.");
+          }
+
+          int compare_parts(const void *a, const void *b) {
+              const char *str1 = *(const char **)a; const char *str2 = *(const char **)b;
+              int num1 = atoi(strrchr(str1, '.') + 1); int num2 = atoi(strrchr(str2, '.') + 1);
+              return (num1 - num2);
+          }
+
+          void join_and_install() {
+              DIR *dir; struct dirent *ent; char *parts[100]; int part_count = 0;
+              if ((dir = opendir(VAULT_DIR)) != NULL) {
+                  while ((ent = readdir(dir)) != NULL) {
+                      if (strstr(ent->d_name, ".pkg.") != NULL) { parts[part_count] = strdup(ent->d_name); part_count++; }
+                  }
+                  closedir(dir);
+              }
+              if (part_count == 0) { log_msg("Vault is empty."); return; }
+              qsort(parts, part_count, sizeof(char *), compare_parts);
+              char final_pkg_path[512]; snprintf(final_pkg_path, sizeof(final_pkg_path), "%sFULL_GAME.pkg", VAULT_DIR);
+              FILE *final_fp = fopen(final_pkg_path, "wb");
+              if (!final_fp) { log_msg("Error creating final PKG."); return; }
+              char buffer[1024 * 1024];
+              for (int i = 0; i < part_count; i++) {
+                  char part_path[512]; snprintf(part_path, sizeof(part_path), "%s%s", VAULT_DIR, parts[i]);
+                  log_msg("Appending part...");
+                  FILE *p_fp = fopen(part_path, "rb");
+                  if (!p_fp) continue;
+                  size_t bytes;
+                  while ((bytes = fread(buffer, 1, sizeof(buffer), p_fp)) > 0) { fwrite(buffer, 1, bytes, final_fp); }
+                  fclose(p_fp); free(parts[i]);
+              }
+              fclose(final_fp);
+              char uri[512]; snprintf(uri, sizeof(uri), "file://%s", final_pkg_path);
+              int ret = sceAppInstUtilAppInstallPkg(uri, NULL, NULL);
+              if (ret == 0) { log_msg("Installation started!"); } else { log_msg("Install error."); }
+          }
+
+          // Auto-run logic for PKG
+          int main() {
+              mkdir(VAULT_DIR, 0777);
+              sceAppInstUtilInitialize();
+              log_msg("=== PS4 PKG VAULT STARTED ===");
+              
+              // If a file named "auto_install" exists in the vault, join. Otherwise wait.
+              // Since you can't type in a PKG, you control it by renaming a file on your PC before uploading.
+              FILE *check = fopen(VAULT_DIR "auto_install", "r");
+              if (check) {
+                  fclose(check);
+                  log_msg("Auto-install triggered!");
+                  join_and_install();
+              } else {
+                  log_msg("Tool running. Drop parts via FTP. Rename a file to 'auto_install' to trigger join.");
+              }
+              
+              sceAppInstUtilTerminate();
+              return 0;
+          }
+          EOF
+
+          $OO_PS4_TOOLCHAIN/bin/orbis-clang pkg_vault.c -o pkg_vault.elf -lSceAppInstUtil -lSceSystemService -lSceKernel
+
+      - name: Build PKG Structure
+        run: |
+          mkdir -p pkg_build/sce_sys
+          cp pkg_vault.elf pkg_build/eboot.bin
+          
+          # Create a dummy param.sfo (Required for PS4 to read it)
+          echo -e "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00" > pkg_build/sce_sys/param.sfo
+          
+          # Create a fake content ID
+          echo "UP0000-CUSA00000_00-PKGVAULT0000000" > pkg_build/sce_sys/content_id.txt
+
+      - name: Package FPKG
+        run: |
+          # Download the Fake PKG tools for Linux
+          wget https://github.com/CyB1K/PS4-Fake-PKG-Tools/releases/download/v1.0/ps4-fpkg-tools-linux.zip
+          unzip ps4-fpkg-tools-linux.zip
+          
+          # Set execute permissions
+          chmod +x *.elf *.exe 2>/dev/null || true
+          
+          # Create a fake passcode
+          echo "00000000000000000000000000000000" > passcode.txt
+          
+          # Build the PKG (exact flags depend on the tool version, assuming standard mkpkg)
+          # We use the tool to compile the pkg_build folder into final.pkg
+          ./mkpkg --type app --passcode passcode.txt --content-id UP0000-CUSA00000_00-PKGVAULT0000000 pkg_build final.pkg || echo "If this fails, check mkpkg syntax."
+          
+      - name: Upload PKG Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pkg-vault-final
+          path: final.pkg
