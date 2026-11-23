@@ -12,6 +12,22 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
+      - name: Install Build Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang lld cmake make wget tar python3 libicu-dev
+
+      - name: Download OpenOrbis Toolchain
+        run: |
+          # Download the permanent GitHub archive for v0.5.4
+          wget https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain/archive/refs/tags/v0.5.4.tar.gz
+          tar -xzf v0.5.4.tar.gz
+          mv OpenOrbis-PS4-Toolchain-0.5.4 toolchain
+          
+          # Export environment variables so orbis-clang can find the SDK
+          echo "OO_PS4_TOOLCHAIN=$PWD/toolchain" >> $GITHUB_ENV
+          echo "$PWD/toolchain/bin" >> $GITHUB_PATH
+
       - name: Create C Source
         run: |
           cat << 'EOF' > pkg_vault.c
@@ -101,10 +117,10 @@ jobs:
           }
           EOF
 
-      - name: Compile C Code using Official GHCR Image
+      - name: Compile C Code
         run: |
-          # Use the correct GitHub Container Registry image and absolute path to the compiler
-          docker run --rm -v "$(pwd)":/workspace -w /workspace ghcr.io/openorbis/toolchain:latest /opt/ps4-toolchain/bin/orbis-clang pkg_vault.c -o pkg_vault.elf -lSceAppInstUtil -lSceSystemService -lSceKernel
+          # orbis-clang will now be found because we added the toolchain/bin folder to the PATH
+          orbis-clang pkg_vault.c -o pkg_vault.elf -lSceAppInstUtil -lSceSystemService -lSceKernel
 
       - name: Build PKG Structure
         run: |
