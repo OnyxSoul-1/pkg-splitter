@@ -8,27 +8,12 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      packages: read
+      contents: read
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
-
-      - name: Install Build Dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y clang lld cmake make wget tar python3 libicu-dev
-
-      - name: Download OpenOrbis Toolchain
-        run: |
-          wget https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain/archive/refs/tags/v0.5.4.tar.gz
-          tar -xzf v0.5.4.tar.gz
-          mv OpenOrbis-PS4-Toolchain-0.5.4 toolchain
-          
-          # Make absolutely sure the scripts are executable
-          chmod +x -R toolchain/bin
-          chmod +x toolchain/bin/*
-          
-          # Set the environment variable
-          echo "OO_PS4_TOOLCHAIN=$PWD/toolchain" >> $GITHUB_ENV
 
       - name: Create C Source
         run: |
@@ -119,10 +104,17 @@ jobs:
           }
           EOF
 
-      - name: Compile C Code
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compile C Code using Official GHCR Image
         run: |
-          # Call the script using its exact path
-          ./toolchain/bin/orbis-clang pkg_vault.c -o pkg_vault.elf -lSceAppInstUtil -lSceSystemService -lSceKernel
+          # Now that we are logged in, this will successfully pull and compile
+          docker run --rm -v "$(pwd)":/workspace -w /workspace ghcr.io/openorbis/toolchain:latest bash -c "orbis-clang pkg_vault.c -o pkg_vault.elf -lSceAppInstUtil -lSceSystemService -lSceKernel"
 
       - name: Build PKG Structure
         run: |
