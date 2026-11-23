@@ -103,9 +103,15 @@ jobs:
 
       - name: Compile with Official Docker Image
         run: |
-          # Use bash -lc so it sources the profile and finds orbis-clang in the PATH
-          # Use --user so the compiled file is owned by the runner, not root
-          docker run --rm --user $(id -u):$(id -g) -v "$(pwd)":/workspace -w /workspace openorbisofficial/toolchain:latest bash -lc "orbis-clang pkg_vault.c -o pkg_vault.elf -lSceAppInstUtil -lSceSystemService -lSceKernel"
+          # We explicitly set the PATH inside the container to find the compiler
+          docker run --rm --user $(id -u):$(id -g) -v "$(pwd)":/workspace -w /workspace openorbisofficial/toolchain:latest bash -c '
+            if [ -d "/opt/ps4/toolchain/bin" ]; then
+              export PATH=$PATH:/opt/ps4/toolchain/bin
+            elif [ -d "/opt/ps4-toolchain/bin" ]; then
+              export PATH=$PATH:/opt/ps4-toolchain/bin
+            fi
+            orbis-clang pkg_vault.c -o pkg_vault.elf -lSceAppInstUtil -lSceSystemService -lSceKernel
+          '
 
       - name: Build PKG Structure
         run: |
