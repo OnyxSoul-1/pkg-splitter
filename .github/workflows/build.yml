@@ -12,34 +12,6 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Install Build Dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y clang lld cmake make git libicu-dev wget python3 libclang-dev llvm-dev
-
-      - name: Clone and Build OpenOrbis Toolchain
-        run: |
-          git clone --depth 1 https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain.git toolchain-src
-          cd toolchain-src
-          mkdir -p build
-          cd build
-          cmake ..
-          make -j$(nproc)
-          cd ..
-          
-          # Automatically find where the compiler was built
-          BIN_PATH=$(find . -name "orbis-clang" -type f | head -n 1)
-          if [ -z "$BIN_PATH" ]; then
-            echo "Build failed: orbis-clang not found."
-            exit 1
-          fi
-          BIN_DIR=$(dirname "$BIN_PATH")
-          echo "Toolchain binary found in: $BIN_DIR"
-          
-          # Export to the environment for the next steps
-          echo "OO_PS4_TOOLCHAIN=$(pwd)" >> $GITHUB_ENV
-          echo "$(pwd)/$BIN_DIR" >> $GITHUB_PATH
-
       - name: Create C Source
         run: |
           cat << 'EOF' > pkg_vault.c
@@ -131,7 +103,8 @@ jobs:
 
       - name: Compile C Code
         run: |
-          orbis-clang pkg_vault.c -o pkg_vault.elf -lSceAppInstUtil -lSceSystemService -lSceKernel
+          # PacBrew image has the toolchain in /usr/bin by default
+          docker run --rm -v "$(pwd)":/workspace -w /workspace pacbrew/ps4-openorbis-toolchain:latest orbis-clang pkg_vault.c -o pkg_vault.elf -lSceAppInstUtil -lSceSystemService -lSceKernel
 
       - name: Build PKG Structure
         run: |
