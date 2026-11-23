@@ -1,160 +1,148 @@
-name: Build PS4 Homebrew PKG
+name: Build PS4 PKG
 
 on:
   push:
-    branches: [ main ]
+  pull_request:
   workflow_dispatch:
+
+env:
+  OO_VERSION: v0.5.4
+  SRC: pkg_vault.c
+  NAME: pkg_vault
+  TITLE: PKG Vault
+  TITLE_ID: BREW00001
+  CONTENT_ID: IV0000-BREW00001_00-PKGVAULT00000000
+  VERSION: "01.00"
 
 jobs:
   build:
-    runs-on: ubuntu-latest
-    permissions:
-      packages: read
-      contents: read
+    runs-on: ubuntu-24.04
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Create C Source
+      - name: Install clang and lld
         run: |
-          cat << 'EOF' > pkg_vault.c
-          #include <stdio.h>
-          #include <stdlib.h>
-          #include <string.h>
-          #include <dirent.h>
-          #include <sys/stat.h>
-          #include <unistd.h>
-          #include <orbis/libkernel.h>
-          #include <orbis/SystemService.h>
-          #include <orbis/AppInst.h>
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends clang-18 lld-18 curl ca-certificates
 
-          #define VAULT_DIR "/data/pkg_vault/"
-          #define USB_DIR "/mnt/usb0/"
-          #define LOG_FILE "/data/vault_log.txt"
-
-          void log_msg(const char* msg) {
-              FILE *f = fopen(LOG_FILE, "a");
-              if (f) { fprintf(f, "%s\n", msg); fclose(f); }
-          }
-
-          void import_part(const char* part_name) {
-              char src_path[512]; char dst_path[512];
-              snprintf(src_path, sizeof(src_path), "%s%s", USB_DIR, part_name);
-              snprintf(dst_path, sizeof(dst_path), "%s%s", VAULT_DIR, part_name);
-              FILE *src = fopen(src_path, "rb");
-              if (!src) { log_msg("Error: Could not find file on USB."); return; }
-              FILE *dst = fopen(dst_path, "wb");
-              if (!dst) { log_msg("Error: Could not create file on PS4."); fclose(src); return; }
-              char buffer[1024 * 1024]; size_t bytes;
-              log_msg("Copying to PS4 hard drive...");
-              while ((bytes = fread(buffer, 1, sizeof(buffer), src)) > 0) { fwrite(buffer, 1, bytes, dst); }
-              fclose(src); fclose(dst);
-              log_msg("Success! Part saved.");
-          }
-
-          int compare_parts(const void *a, const void *b) {
-              const char *str1 = *(const char **)a; const char *str2 = *(const char **)b;
-              int num1 = atoi(strrchr(str1, '.') + 1); int num2 = atoi(strrchr(str2, '.') + 1);
-              return (num1 - num2);
-          }
-
-          void join_and_install() {
-              DIR *dir; struct dirent *ent; char *parts[100]; int part_count = 0;
-              if ((dir = opendir(VAULT_DIR)) != NULL) {
-                  while ((ent = readdir(dir)) != NULL) {
-                      if (strstr(ent->d_name, ".pkg.") != NULL) { parts[part_count] = strdup(ent->d_name); part_count++; }
-                  }
-                  closedir(dir);
-              }
-              if (part_count == 0) { log_msg("Vault is empty."); return; }
-              qsort(parts, part_count, sizeof(char *), compare_parts);
-              char final_pkg_path[512]; snprintf(final_pkg_path, sizeof(final_pkg_path), "%sFULL_GAME.pkg", VAULT_DIR);
-              FILE *final_fp = fopen(final_pkg_path, "wb");
-              if (!final_fp) { log_msg("Error creating final PKG."); return; }
-              char buffer[1024 * 1024];
-              for (int i = 0; i < part_count; i++) {
-                  char part_path[512]; snprintf(part_path, sizeof(part_path), "%s%s", VAULT_DIR, parts[i]);
-                  log_msg("Appending part...");
-                  FILE *p_fp = fopen(part_path, "rb");
-                  if (!p_fp) continue;
-                  size_t bytes;
-                  while ((bytes = fread(buffer, 1, sizeof(buffer), p_fp)) > 0) { fwrite(buffer, 1, bytes, final_fp); }
-                  fclose(p_fp); free(parts[i]);
-              }
-              fclose(final_fp);
-              char uri[512]; snprintf(uri, sizeof(uri), "file://%s", final_pkg_path);
-              int ret = sceAppInstUtilAppInstallPkg(uri, NULL, NULL);
-              if (ret == 0) { log_msg("Installation started!"); } else { log_msg("Install error."); }
-          }
-
-          int main() {
-              mkdir(VAULT_DIR, 0777);
-              sceAppInstUtilInitialize();
-              log_msg("=== PS4 PKG VAULT STARTED ===");
-              FILE *check = fopen(VAULT_DIR "auto_install", "r");
-              if (check) {
-                  fclose(check);
-                  log_msg("Auto-install triggered!");
-                  join_and_install();
-              } else {
-                  log_msg("Tool running. Drop parts via FTP. Create 'auto_install' to trigger.");
-              }
-              sceAppInstUtilTerminate();
-              return 0;
-          }
-          EOF
-
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Compile C Code using Official GHCR Image
+      - name: Download OpenOrbis toolchain
         run: |
-          # Now that we are logged in, this will successfully pull and compile
-          docker run --rm -v "$(pwd)":/workspace -w /workspace ghcr.io/openorbis/toolchain:latest bash -c "orbis-clang pkg_vault.c -o pkg_vault.elf -lSceAppInstUtil -lSceSystemService -lSceKernel"
+          set -euo pipefail
+          TC="$RUNNER_TEMP/OpenOrbis-PS4-Toolchain"
+          mkdir -p "$TC"
+          curl -fL --retry 5 --retry-delay 5 -o "$RUNNER_TEMP/tc.tar.gz" \
+            "https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain/releases/download/${OO_VERSION}/toolchain-llvm-18.tar.gz"
+          tar -xzf "$RUNNER_TEMP/tc.tar.gz" --strip-components=2 -C "$TC"
+          chmod +x "$TC"/bin/linux/*
+          if [ ! -f "$TC/link.x" ]; then
+            echo "link.x missing, tarball layout differs from expected:"
+            tar -tzf "$RUNNER_TEMP/tc.tar.gz" | head -20
+            exit 1
+          fi
+          echo "OO_PS4_TOOLCHAIN=$TC" >> "$GITHUB_ENV"
 
-      - name: Build PKG Structure
+      - name: Compile, link and make eboot.bin
         run: |
-          mkdir -p pkg_build/sce_sys
-          cp pkg_vault.elf pkg_build/eboot.bin
-          python3 -c "import struct; f=open('pkg_build/sce_sys/param.sfo', 'wb'); f.write(b'\x00PSF' + struct.pack('<I', 0x01010000) + struct.pack('<I', 20) + struct.pack('<I', 20) + struct.pack('<I', 0)); f.close()"
+          set -euo pipefail
+          TC="$OO_PS4_TOOLCHAIN"
+          clang-18 --target=x86_64-pc-freebsd12-elf -fPIC -funwind-tables -c \
+            -isysroot "$TC" -isystem "$TC/include" "$SRC" -o "$NAME.o" || {
+              echo "--- compile failed. AppInst-related headers in this toolchain:"
+              ls "$TC/include/orbis" | grep -i appinst || true
+              exit 1
+            }
+          /usr/lib/llvm-18/bin/ld.lld "$NAME.o" -o "$NAME.elf" \
+            -m elf_x86_64 -pie --script "$TC/link.x" --eh-frame-hdr \
+            -L"$TC/lib" -lc -lkernel "$TC/lib/crt1.o"
+          "$TC/bin/linux/create-fself" -in="$NAME.elf" -out="$NAME.oelf" \
+            --eboot eboot.bin --paid 0x3800000000000011
+          ls -l "$NAME.elf" eboot.bin
 
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '8.0.x'
-
-      - name: Package FPKG (Using LibOrbisPkg)
+      - name: Provide libssl1.1 for PkgTool.Core
         run: |
-          wget https://github.com/maxton/LibOrbisPkg/releases/latest/download/LibOrbisPkg.Cli-linux-x64.tar.gz
-          mkdir liborbis
-          tar -xzf LibOrbisPkg.Cli-linux-x64.tar.gz -C liborbis
-          chmod +x liborbis/PkgEditor
-          
-          cat << 'EOF' > project.gp4
-          <?xml version="1.0" encoding="utf-8"?>
-          <psproject fmt="gp4" version="1000">
-            <volume>
-              <chunk phys="0" pad="0" />
-              <chunk phys="1" pad="0" />
-            </volume>
-            <files img_no="0">
-              <file targ_path="eboot.bin" orig_path="pkg_build/eboot.bin" />
-              <file targ_path="sce_sys/param.sfo" orig_path="pkg_build/sce_sys/param.sfo" />
-            </files>
-            <rootdir>
-              <dir targ_name="sce_sys" />
-            </rootdir>
-          </psproject>
-          EOF
+          set -euo pipefail
+          POOL=http://archive.ubuntu.com/ubuntu/pool/main/o/openssl
+          DEB=$(curl -fsSL "$POOL/" | grep -oE 'libssl1\.1_[0-9A-Za-z.+~-]+_amd64\.deb' | sort -uV | tail -n1)
+          echo "Using $DEB"
+          curl -fsSL -o "$RUNNER_TEMP/libssl.deb" "$POOL/$DEB"
+          mkdir -p "$RUNNER_TEMP/libssl11"
+          dpkg-deb -x "$RUNNER_TEMP/libssl.deb" "$RUNNER_TEMP/libssl11"
+          echo "SSL11_DIR=$RUNNER_TEMP/libssl11/usr/lib/x86_64-linux-gnu" >> "$GITHUB_ENV"
 
-          ./liborbis/PkgEditor build -g project.gp4 -o final.pkg --passcode 00000000000000000000000000000000 --content-id UP0000-CUSA00000_00-PKGVAULT0000000
+      - name: Build param.sfo, GP4 and fake PKG
+        env:
+          DOTNET_SYSTEM_GLOBALIZATION_INVARIANT: "1"
+          DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+        run: |
+          set -euo pipefail
+          export LD_LIBRARY_PATH="$SSL11_DIR${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+          TC="$OO_PS4_TOOLCHAIN"
+          BIN="$TC/bin/linux"
+          mkdir -p pkg/sce_sys/about pkg/sce_module
+          cp eboot.bin pkg/eboot.bin
 
-      - name: Upload PKG Artifact
+          # icon0.png (stdlib-only solid-colour PNG)
+          python3 - <<'PY'
+          import struct, zlib
+          def chunk(t, d):
+              c = struct.pack(">I", len(d)) + t + d
+              return c + struct.pack(">I", zlib.crc32(t + d) & 0xffffffff)
+          w = h = 512
+          row = b"\x00" + bytes([32, 64, 160]) * w
+          png = (b"\x89PNG\r\n\x1a\n"
+                 + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 2, 0, 0, 0))
+                 + chunk(b"IDAT", zlib.compress(row * h, 9))
+                 + chunk(b"IEND", b""))
+          open("pkg/sce_sys/icon0.png", "wb").write(png)
+          PY
+
+          # Optional runtime files that ship with the toolchain samples
+          FILES="eboot.bin sce_sys/param.sfo sce_sys/icon0.png"
+          for item in right.sprx:sce_sys/about libc.prx:sce_module libSceFios2.prx:sce_module; do
+            n="${item%%:*}"; d="${item##*:}"
+            src=$(find "$TC" -type f -name "$n" -print -quit)
+            if [ -n "$src" ]; then
+              cp "$src" "pkg/$d/$n"
+              FILES="$FILES $d/$n"
+            fi
+          done
+
+          # param.sfo (valid PSF, generated by PkgTool.Core)
+          SFO=pkg/sce_sys/param.sfo
+          set_entry() { "$BIN/PkgTool.Core" sfo_setentry "$SFO" "$1" --type "$2" --maxsize "$3" --value "$4"; }
+          "$BIN/PkgTool.Core" sfo_new "$SFO"
+          set_entry APP_TYPE Integer 4 1
+          set_entry APP_VER Utf8 8 "$VERSION"
+          set_entry ATTRIBUTE Integer 4 0
+          set_entry CATEGORY Utf8 4 gd
+          set_entry CONTENT_ID Utf8 48 "$CONTENT_ID"
+          set_entry DOWNLOAD_DATA_SIZE Integer 4 0
+          set_entry SYSTEM_VER Integer 4 0
+          set_entry TITLE Utf8 128 "$TITLE"
+          set_entry TITLE_ID Utf8 12 "$TITLE_ID"
+          set_entry VERSION Utf8 8 "$VERSION"
+          od -An -c -N16 "$SFO"
+          [ "$(head -c4 "$SFO" | tail -c3)" = "PSF" ] || { echo "param.sfo is missing the PSF magic"; exit 1; }
+
+          # GP4 + fake PKG
+          ( cd pkg && "$BIN/create-gp4" -out pkg.gp4 --content-id="$CONTENT_ID" --files "$FILES" )
+          "$BIN/PkgTool.Core" pkg_build pkg/pkg.gp4 .
+          mv "$CONTENT_ID.pkg" final.pkg
+          ls -l final.pkg
+
+      - name: Upload final.pkg
         uses: actions/upload-artifact@v4
         with:
-          name: pkg-vault-final
+          name: final-pkg
           path: final.pkg
+          if-no-files-found: error
+
+      - name: Upload debug files
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-files
+          path: |
+            pkg_vault.elf
+            eboot.bin
+            pkg/sce_sys/param.sfo
+            pkg/pkg.gp4
