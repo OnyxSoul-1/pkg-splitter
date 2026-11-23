@@ -19,17 +19,16 @@ jobs:
 
       - name: Install .NET SDK
         run: |
-          # Install .NET 8.0 using the official Microsoft script
           wget https://dot.net/v1/dotnet-install.sh -O dotnet-install.sh
           chmod +x dotnet-install.sh
           ./dotnet-install.sh --channel 8.0
-          # Add dotnet to PATH for the rest of the job
           echo "$HOME/.dotnet" >> $GITHUB_PATH
           echo "DOTNET_ROOT=$HOME/.dotnet" >> $GITHUB_ENV
 
       - name: Download OpenOrbis Toolchain
         run: |
-          wget https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain/releases/latest/download/toolchain-linux.tar.gz
+          # Using v0.5.3 which still has the Linux tarball
+          wget https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain/releases/download/v0.5.3/toolchain-linux.tar.gz
           tar -xzf toolchain-linux.tar.gz
           echo "OO_PS4_TOOLCHAIN=$PWD/toolchain" >> $GITHUB_ENV
 
@@ -127,14 +126,14 @@ jobs:
         run: |
           mkdir -p pkg_build/sce_sys
           cp pkg_vault.elf pkg_build/eboot.bin
-          
-          # Create a fake param.sfo using a known valid hex header
           printf '\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00' > pkg_build/sce_sys/param.sfo
 
       - name: Package FPKG (Using LibOrbisPkg)
         run: |
-          wget https://github.com/maxton/LibOrbisPkg/releases/latest/download/LibOrbisPkg.Cli-linux-x64.zip
-          unzip LibOrbisPkg.Cli-linux-x64.zip -d liborbis
+          # LibOrbisPkg uses .tar.gz now, we extract it directly
+          wget https://github.com/maxton/LibOrbisPkg/releases/latest/download/LibOrbisPkg.Cli-linux-x64.tar.gz
+          mkdir liborbis
+          tar -xzf LibOrbisPkg.Cli-linux-x64.tar.gz -C liborbis
           chmod +x liborbis/PkgEditor
           
           cat << 'EOF' > project.gp4
