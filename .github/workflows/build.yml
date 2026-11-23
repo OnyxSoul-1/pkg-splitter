@@ -12,6 +12,21 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
+      - name: Install Basic Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget tar python3 libicu-dev
+
+      - name: Download OpenOrbis Toolchain
+        run: |
+          # The CORRECT filename is OpenOrbis-PS4-Toolchain.tar.gz
+          wget https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain/releases/download/v0.5.4/OpenOrbis-PS4-Toolchain.tar.gz
+          tar -xzf OpenOrbis-PS4-Toolchain.tar.gz
+          
+          # Set the environment variables
+          echo "OO_PS4_TOOLCHAIN=$PWD" >> $GITHUB_ENV
+          echo "$PWD/bin" >> $GITHUB_PATH
+
       - name: Create C Source
         run: |
           cat << 'EOF' > pkg_vault.c
@@ -103,8 +118,7 @@ jobs:
 
       - name: Compile C Code
         run: |
-          # PacBrew image has the toolchain in /usr/bin by default
-          docker run --rm -v "$(pwd)":/workspace -w /workspace pacbrew/ps4-openorbis-toolchain:latest orbis-clang pkg_vault.c -o pkg_vault.elf -lSceAppInstUtil -lSceSystemService -lSceKernel
+          orbis-clang pkg_vault.c -o pkg_vault.elf -lSceAppInstUtil -lSceSystemService -lSceKernel
 
       - name: Build PKG Structure
         run: |
