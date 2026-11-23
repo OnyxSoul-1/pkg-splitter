@@ -15,11 +15,12 @@ jobs:
       - name: Install Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y clang lld cmake make wget zip
+          sudo apt-get install -y clang lld cmake make wget unzip zip dotnet-sdk-8.0
 
       - name: Download OpenOrbis Toolchain
         run: |
-          wget https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain/releases/download/v0.5.0/toolchain-linux.tar.gz
+          # Fetch the latest release dynamically to avoid 404s
+          wget https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain/releases/latest/download/toolchain-linux.tar.gz
           tar -xzf toolchain-linux.tar.gz
           echo "OO_PS4_TOOLCHAIN=$PWD/toolchain" >> $GITHUB_ENV
 
@@ -40,7 +41,6 @@ jobs:
           #define USB_DIR "/mnt/usb0/"
           #define LOG_FILE "/data/vault_log.txt"
 
-          // Helper to write logs to file
           void log_msg(const char* msg) {
               FILE *f = fopen(LOG_FILE, "a");
               if (f) { fprintf(f, "%s\n", msg); fclose(f); }
@@ -96,28 +96,22 @@ jobs:
               if (ret == 0) { log_msg("Installation started!"); } else { log_msg("Install error."); }
           }
 
-          // Auto-run logic for PKG
           int main() {
               mkdir(VAULT_DIR, 0777);
               sceAppInstUtilInitialize();
               log_msg("=== PS4 PKG VAULT STARTED ===");
-              
-              // If a file named "auto_install" exists in the vault, join. Otherwise wait.
-              // Since you can't type in a PKG, you control it by renaming a file on your PC before uploading.
               FILE *check = fopen(VAULT_DIR "auto_install", "r");
               if (check) {
                   fclose(check);
                   log_msg("Auto-install triggered!");
                   join_and_install();
               } else {
-                  log_msg("Tool running. Drop parts via FTP. Rename a file to 'auto_install' to trigger join.");
+                  log_msg("Tool running. Drop parts via FTP. Create 'auto_install' to trigger.");
               }
-              
               sceAppInstUtilTerminate();
               return 0;
           }
           EOF
-
           $OO_PS4_TOOLCHAIN/bin/orbis-clang pkg_vault.c -o pkg_vault.elf -lSceAppInstUtil -lSceSystemService -lSceKernel
 
       - name: Build PKG Structure
@@ -125,28 +119,37 @@ jobs:
           mkdir -p pkg_build/sce_sys
           cp pkg_vault.elf pkg_build/eboot.bin
           
-          # Create a dummy param.sfo (Required for PS4 to read it)
-          echo -e "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00" > pkg_build/sce_sys/param.sfo
-          
-          # Create a fake content ID
-          echo "UP0000-CUSA00000_00-PKGVAULT0000000" > pkg_build/sce_sys/content_id.txt
+          # Create a fake param.sfo using a known valid hex header
+          printf '\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00' > pkg_build/sce_sys/param.sfo
 
-      - name: Package FPKG
+      - name: Package FPKG (Using LibOrbisPkg)
         run: |
-          # Download the Fake PKG tools for Linux
-          wget https://github.com/CyB1K/PS4-Fake-PKG-Tools/releases/download/v1.0/ps4-fpkg-tools-linux.zip
-          unzip ps4-fpkg-tools-linux.zip
+          # Download LibOrbisPkg (a reliable cross-platform PKG builder)
+          wget https://github.com/maxton/LibOrbisPkg/releases/latest/download/LibOrbisPkg.Cli-linux-x64.zip
+          unzip LibOrbisPkg.Cli-linux-x64.zip -d liborbis
+          chmod +x liborbis/PkgEditor
           
-          # Set execute permissions
-          chmod +x *.elf *.exe 2>/dev/null || true
-          
-          # Create a fake passcode
-          echo "00000000000000000000000000000000" > passcode.txt
-          
-          # Build the PKG (exact flags depend on the tool version, assuming standard mkpkg)
-          # We use the tool to compile the pkg_build folder into final.pkg
-          ./mkpkg --type app --passcode passcode.txt --content-id UP0000-CUSA00000_00-PKGVAULT0000000 pkg_build final.pkg || echo "If this fails, check mkpkg syntax."
-          
+          # Generate a GP4 project file
+          cat << 'EOF' > project.gp4
+          <?xml version="1.0" encoding="utf-8"?>
+          <psproject fmt="gp4" version="1000">
+            <volume>
+              <chunk phys="0" pad="0" />
+              <chunk phys="1" pad="0" />
+            </volume>
+            <files img_no="0">
+              <file targ_path="eboot.bin" orig_path="pkg_build/eboot.bin" />
+              <file targ_path="sce_sys/param.sfo" orig_path="pkg_build/sce_sys/param.sfo" />
+            </files>
+            <rootdir>
+              <dir targ_name="sce_sys" />
+            </rootdir>
+          </psproject>
+          EOF
+
+          # Build the PKG from the GP4
+          ./liborbis/PkgEditor build -g project.gp4 -o final.pkg --passcode 00000000000000000000000000000000 --content-id UP0000-CUSA00000_00-PKGVAULT0000000
+
       - name: Upload PKG Artifact
         uses: actions/upload-artifact@v4
         with:
