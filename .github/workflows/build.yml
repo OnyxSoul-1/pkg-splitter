@@ -19,14 +19,16 @@ jobs:
 
       - name: Download OpenOrbis Toolchain
         run: |
-          # Download the permanent GitHub archive for v0.5.4
           wget https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain/archive/refs/tags/v0.5.4.tar.gz
           tar -xzf v0.5.4.tar.gz
           mv OpenOrbis-PS4-Toolchain-0.5.4 toolchain
           
-          # Export environment variables so orbis-clang can find the SDK
+          # Make absolutely sure the scripts are executable
+          chmod +x -R toolchain/bin
+          chmod +x toolchain/bin/*
+          
+          # Set the environment variable
           echo "OO_PS4_TOOLCHAIN=$PWD/toolchain" >> $GITHUB_ENV
-          echo "$PWD/toolchain/bin" >> $GITHUB_PATH
 
       - name: Create C Source
         run: |
@@ -119,8 +121,8 @@ jobs:
 
       - name: Compile C Code
         run: |
-          # orbis-clang will now be found because we added the toolchain/bin folder to the PATH
-          orbis-clang pkg_vault.c -o pkg_vault.elf -lSceAppInstUtil -lSceSystemService -lSceKernel
+          # Call the script using its exact path
+          ./toolchain/bin/orbis-clang pkg_vault.c -o pkg_vault.elf -lSceAppInstUtil -lSceSystemService -lSceKernel
 
       - name: Build PKG Structure
         run: |
