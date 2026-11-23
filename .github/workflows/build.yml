@@ -101,10 +101,10 @@ jobs:
           }
           EOF
 
-      - name: Compile C Code using Official Docker Image
+      - name: Compile C Code using Official GHCR Image
         run: |
-          # Use bash -c to ensure the PATH is loaded, and compile the file
-          docker run --rm -v "$(pwd)":/workspace -w /workspace openorbisofficial/toolchain:latest bash -c "orbis-clang pkg_vault.c -o pkg_vault.elf -lSceAppInstUtil -lSceSystemService -lSceKernel"
+          # Use the correct GitHub Container Registry image and absolute path to the compiler
+          docker run --rm -v "$(pwd)":/workspace -w /workspace ghcr.io/openorbis/toolchain:latest /opt/ps4-toolchain/bin/orbis-clang pkg_vault.c -o pkg_vault.elf -lSceAppInstUtil -lSceSystemService -lSceKernel
 
       - name: Build PKG Structure
         run: |
