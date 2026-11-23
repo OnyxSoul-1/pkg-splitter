@@ -12,13 +12,25 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Install .NET SDK (for Packaging)
+      - name: Install Basic Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang lld cmake make wget unzip zip libicu-dev
+
+      - name: Install .NET SDK
         run: |
           wget https://dot.net/v1/dotnet-install.sh -O dotnet-install.sh
           chmod +x dotnet-install.sh
           ./dotnet-install.sh --channel 8.0
           echo "$HOME/.dotnet" >> $GITHUB_PATH
           echo "DOTNET_ROOT=$HOME/.dotnet" >> $GITHUB_ENV
+
+      - name: Download OpenOrbis Toolchain (Backporter Fork)
+        run: |
+          # Download from a fork that still hosts the Linux toolchain binary
+          wget https://github.com/backporter/OpenOrbis-PS4-Toolchain/releases/download/v0.5.2/toolchain-linux.tar.gz
+          tar -xzf toolchain-linux.tar.gz
+          echo "OO_PS4_TOOLCHAIN=$PWD/toolchain" >> $GITHUB_ENV
 
       - name: Create C Source
         run: |
@@ -109,10 +121,9 @@ jobs:
           }
           EOF
 
-      - name: Compile C Code using Docker
+      - name: Compile C Code
         run: |
-          # Use the official community docker image that has all the toolchains pre-installed
-          docker run --rm -v "$PWD":/src -w /src openorbis/toolchain:latest orbis-clang pkg_vault.c -o pkg_vault.elf -lSceAppInstUtil -lSceSystemService -lSceKernel
+          $OO_PS4_TOOLCHAIN/bin/orbis-clang pkg_vault.c -o pkg_vault.elf -lSceAppInstUtil -lSceSystemService -lSceKernel
 
       - name: Build PKG Structure
         run: |
