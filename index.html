@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PKG Splitter</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<header>
+  <h1>PKG Splitter</h1>
+  <p class="sub">Split large <code>.pkg</code> into 4&nbsp;GiB parts. Rejoin for verification. Runs entirely in your browser — nothing uploaded.</p>
+</header>
+
+<section class="card">
+  <h2>1 · Split</h2>
+  <label>Input <code>.pkg</code>
+    <input type="file" id="split-file" accept=".pkg">
+  </label>
+  <label>Output base name
+    <input type="text" id="split-name" placeholder="GRAVITY RUSH 2">
+  </label>
+  <label>Chunk size
+    <select id="split-size">
+      <option value="4294967296" selected>4 GiB (FAT32 safe)</option>
+      <option value="2147483648">2 GiB</option>
+      <option value="1073741824">1 GiB</option>
+    </select>
+  </label>
+  <button id="split-go">Split &amp; download parts</button>
+  <div id="split-log" class="log"></div>
+</section>
+
+<section class="card">
+  <h2>2 · Rejoin (verify)</h2>
+  <label>Base name (must match the split base name)
+    <input type="text" id="join-name" placeholder="GRAVITY RUSH 2">
+  </label>
+  <label>Select all part files (multi-select)
+    <input type="file" id="join-files" multiple accept=".pkg.*">
+  </label>
+  <button id="join-go">Rejoin</button>
+  <div id="join-log" class="log"></div>
+</section>
+
+<footer>
+  <p>Parts are named <code>&lt;name&gt;.pkg.0</code>, <code>.1</code>, … Copy all parts to the USB root. The PS4 Package Installer reassembles them during install.</p>
+</footer>
+
+<script src="js/split.js"></script>
+<script src="js/join.js"></script>
+</body>
+</html>
