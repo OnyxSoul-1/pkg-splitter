@@ -1,16 +1,263 @@
-:root{--bg:#0f1115;--card:#181b22;--fg:#e6e8ee;--muted:#8b91a1;--accent:#4f8cff;--ok:#39d98a;--err:#ff5c5c}
-*{box-sizing:border-box}
-body{margin:0;font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--fg)}
-header{padding:2rem 1rem 1rem;max-width:760px;margin:0 auto}
-h1{margin:0 0 .25rem;font-size:1.6rem}
-.sub{color:var(--muted);margin:0 0 1rem}
-.card{background:var(--card);border:1px solid #262a34;border-radius:12px;padding:1.25rem;max-width:760px;margin:1rem auto}
-h2{margin:0 0 1rem;font-size:1.1rem}
-label{display:block;margin:.75rem 0;color:var(--muted);font-size:.9rem}
-input[type=text],input[type=file],select{display:block;width:100%;margin-top:.35rem;padding:.55rem .7rem;border-radius:8px;border:1px solid #2c313d;background:#11141a;color:var(--fg)}
-button{margin-top:1rem;padding:.7rem 1.2rem;border:0;border-radius:8px;background:var(--accent);color:#fff;font-weight:600;cursor:pointer}
-button:disabled{opacity:.5;cursor:default}
-.log{margin-top:1rem;font:12px/1.5 ui-monospace,Menlo,monospace;color:var(--muted);white-space:pre-wrap;max-height:260px;overflow:auto}
-.log .ok{color:var(--ok)} .log .err{color:var(--err)}
-footer{color:var(--muted);max-width:760px;margin:2rem auto 4rem;padding:0 1rem;font-size:.85rem}
-code{background:#11141a;padding:.1em .35em;border-radius:4px}
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@400;700&display=swap');
+
+:root {
+  --bg: #0a0b10;
+  --card-bg: rgba(22, 25, 35, 0.7);
+  --border: rgba(255, 255, 255, 0.08);
+  --fg: #ffffff;
+  --muted: #8b92a5;
+  --accent: #4f8cff;
+  --accent-glow: rgba(79, 140, 255, 0.4);
+  --ok: #39d98a;
+  --err: #ff5c5c;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font: 15px/1.6 'Inter', system-ui, sans-serif;
+  background-color: var(--bg);
+  color: var(--fg);
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  overflow-x: hidden;
+  position: relative;
+}
+
+/* Background Glow Effect */
+.background-glow {
+  position: absolute;
+  top: -20%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 600px;
+  height: 600px;
+  background: radial-gradient(circle, rgba(79, 140, 255, 0.15) 0%, transparent 60%);
+  z-index: -1;
+  pointer-events: none;
+}
+
+.container {
+  width: 100%;
+  max-width: 680px;
+  padding: 2rem;
+  z-index: 1;
+}
+
+header {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.logo {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+  filter: drop-shadow(0 0 15px var(--accent-glow));
+}
+
+h1 {
+  font-size: 2.2rem;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  background: linear-gradient(to right, #fff, #8b92a5);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  margin-bottom: 0.5rem;
+}
+
+.sub {
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+/* Glassmorphism Card */
+.card {
+  background: var(--card-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 2rem;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+}
+
+h2 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--muted);
+  margin-bottom: 1.5rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+/* Inputs */
+.input-group {
+  margin-bottom: 1.25rem;
+}
+
+label {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--muted);
+  margin-bottom: 0.5rem;
+}
+
+input[type="text"], select {
+  width: 100%;
+  padding: 0.8rem 1rem;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  color: var(--fg);
+  font-family: 'Inter', sans-serif;
+  font-size: 1rem;
+  transition: all 0.2s ease;
+}
+
+input[type="text"]:focus, select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-glow);
+}
+
+.grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+/* Custom File Upload */
+.file-upload input[type="file"] {
+  display: none;
+}
+
+.file-label {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 1.5rem;
+  background: rgba(0, 0, 0, 0.2);
+  border: 2px dashed rgba(255, 255, 255, 0.15);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: var(--muted);
+}
+
+.file-label:hover {
+  border-color: var(--accent);
+  background: rgba(79, 140, 255, 0.05);
+  color: var(--fg);
+}
+
+.file-icon {
+  font-size: 1.5rem;
+}
+
+/* Button */
+.btn-primary {
+  width: 100%;
+  padding: 1rem;
+  margin-top: 1rem;
+  margin-bottom: 1.5rem;
+  background: linear-gradient(135deg, #4f8cff 0%, #3b71db 100%);
+  border: none;
+  border-radius: 12px;
+  color: white;
+  font-size: 1.1rem;
+  font-weight: 600;
+  font-family: 'Inter', sans-serif;
+  cursor: pointer;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  transition: transform 0.1s ease, box-shadow 0.2s ease;
+  box-shadow: 0 4px 15px var(--accent-glow);
+}
+
+.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px var(--accent-glow);
+}
+
+.btn-primary:active {
+  transform: translateY(0);
+}
+
+/* Terminal Log */
+.terminal {
+  background: #000;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.terminal-header {
+  background: #1a1c23;
+  padding: 0.5rem 1rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+}
+.dot.red { background: #ff5f56; }
+.dot.yellow { background: #ffbd2e; }
+.dot.green { background: #27c93f; }
+
+.terminal-title {
+  margin-left: 10px;
+  font-size: 0.75rem;
+  color: var(--muted);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.log {
+  padding: 1rem;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.85rem;
+  color: var(--muted);
+  max-height: 200px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  line-height: 1.5;
+}
+
+.log .ok { color: var(--ok); }
+.log .err { color: var(--err); }
+
+footer {
+  text-align: center;
+  margin-top: 2rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+footer code {
+  background: rgba(255, 255, 255, 0.1);
+  padding: 0.2em 0.4em;
+  border-radius: 4px;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* Mobile */
+@media (max-width: 600px) {
+  .grid-2 { grid-template-columns: 1fr; }
+  .container { padding: 1rem; }
+  .card { padding: 1.5rem; }
+  h1 { font-size: 1.8rem; }
+}
