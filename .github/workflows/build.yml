@@ -51,21 +51,24 @@ jobs:
           clang-18 --target=x86_64-pc-freebsd12-elf -fPIC -funwind-tables -c \
             $EXTRA_CFLAGS -isysroot "$TC" -isystem "$TC/include" "$SRC" -o "$NAME.o" || {
               echo "--- compile failed. Headers present:"
-              ls "$TC/include/orbis" | grep -i -E "pad|userservice|appinst" || true
-              grep -n -i "install" "$TC/include/orbis/AppInstUtil.h" 2>/dev/null | head -40 || true
+              ls "$TC/include/orbis" | grep -i -E "pad|userservice|appinst|videoout" || true
               exit 1
             }
 
           LIBS="-lc -lkernel"
-          NEEDED="ScePad SceUserService"
+          NEEDED="ScePad SceUserService SceVideoOut"
           case "$EXTRA_CFLAGS" in *ENABLE_APPINST*) NEEDED="$NEEDED SceAppInstUtil";; esac
           for l in $NEEDED; do
             if compgen -G "$TC/lib/lib$l.*" > /dev/null; then
               LIBS="$LIBS -l$l"
             else
-              echo "ERROR: stub lib$l not found in $TC/lib"; ls "$TC/lib" | head -50; exit 1
+              echo "ERROR: stub lib$l not found in $TC/lib"; ls "$TC/lib" | head -60; exit 1
             fi
           done
+          # optional: lets the app hide the system splash screen
+          if compgen -G "$TC/lib/libSceSystemService.*" > /dev/null; then
+            LIBS="$LIBS -lSceSystemService"
+          fi
           echo "Linking with: $LIBS"
 
           /usr/lib/llvm-18/bin/ld.lld "$NAME.o" -o "$NAME.elf" \
@@ -97,7 +100,11 @@ jobs:
           mkdir -p pkg/sce_sys/about pkg/sce_module
           cp eboot.bin pkg/eboot.bin
 
-          python3 - <<'PY'
+          # icon: use icon0.png from the repo root if you uploaded one
+          if [ -f icon0.png ]; then
+            cp icon0.png pkg/sce_sys/icon0.png
+          else
+            python3 - <<'PY'
           import struct, zlib
           def chunk(t, d):
               c = struct.pack(">I", len(d)) + t + d
@@ -110,6 +117,7 @@ jobs:
                  + chunk(b"IEND", b""))
           open("pkg/sce_sys/icon0.png", "wb").write(png)
           PY
+          fi
 
           FILES="eboot.bin sce_sys/param.sfo sce_sys/icon0.png"
           for item in right.sprx:sce_sys/about libc.prx:sce_module libSceFios2.prx:sce_module; do
