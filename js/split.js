@@ -1,4 +1,3 @@
-const CHUNK_DEFAULT = 4294967296;
 const $ = id => document.getElementById(id);
 const log = (el, msg, cls="") => {
   const d = document.createElement("div");
@@ -15,50 +14,68 @@ function sanitize(name) {
 $("split-go").addEventListener("click", async () => {
   const fileEl = $("split-file");
   const out = $("split-log");
-  out.innerHTML = "";
-  const file = fileEl.files[0];
+  const listContainer = $("download-list");
+  const card = $("download-card");
   
+  out.innerHTML = "";
+  listContainer.innerHTML = "";
+  card.style.display = "none";
+  
+  const file = fileEl.files[0];
   if (!file) return log(out, "Pick a .pkg file first.", "err");
   if (!file.name.toLowerCase().endsWith(".pkg")) return log(out, "File does not end in .pkg.", "err");
-  if (!window.showDirectoryPicker) return log(out, "Your browser lacks the File System Access API. Use Chrome or Edge on desktop.", "err");
 
   const base = sanitize($("split-name").value || file.name.replace(/\.pkg$/i, ""));
-  const chunk = parseInt($("split-size").value, 10) || CHUNK_DEFAULT;
+  
+  // Get the custom GB size from the input box
+  let sizeInput = parseFloat($("split-size-custom").value);
+  if (isNaN(sizeInput) || sizeInput <= 0) sizeInput = 4; // Default to 4GB if they type nothing
+  
+  // Convert GB to Bytes (1 GB = 1024 * 1024 * 1024 bytes)
+  const chunk = Math.floor(sizeInput * 1024 * 1024 * 1024);
+  
   const parts = Math.ceil(file.size / chunk);
   
   log(out, `Input: ${file.name} (${file.size.toLocaleString()} bytes)`);
-  log(out, `Base name: ${base}`);
-  log(out, `Chunk: ${chunk.toLocaleString()} bytes → ${parts} part(s)`);
+  log(out, `Cut Size: ${sizeInput} GB (${chunk.toLocaleString()} bytes)`);
+  log(out, `Total Parts: ${parts}`);
   
-  try {
-    log(out, "Please select your USB folder to save the parts...");
-    // Ask user to select the USB folder ONCE
-    const dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
-    
+  // Show loading text
+  $("loading").style.display = "block";
+
+  // Slight delay so the browser can show the loading text before it cuts
+  setTimeout(() => {
     for (let i = 0; i < parts; i++) {
       const start = i * chunk;
       const end = Math.min(start + chunk, file.size);
+      
+      // Cut the file block
       const blob = file.slice(start, end);
+      
+      // Create a download link for this block
+      const url = URL.createObjectURL(blob);
       const name = `${base}.pkg.${i}`;
       
-      log(out, `Writing part ${i+1} of ${parts}...`);
+      // Create the button
+      const btn = document.createElement("a");
+      btn.href = url;
+      btn.download = name; // Tells browser to download it
+      btn.className = "download-btn";
       
-      // Create the file directly inside the selected folder
-      const fileHandle = await dirHandle.getFileHandle(name, { create: true });
-      const writable = await fileHandle.createWritable();
+      // Calculate size in GB for the button
+      const gbSize = (blob.size / (1024 * 1024 * 1024)).toFixed(2);
       
-      // Stream the chunk to the file to prevent memory crashes
-      await blob.stream().pipeTo(writable);
+      btn.innerHTML = `<span>Part ${i}</span> <span class="size">${gbSize} GB</span> ⬇️`;
       
-      log(out, `Saved ${name} — ${blob.size.toLocaleString()} bytes`, "ok");
+      listContainer.appendChild(btn);
+      
+      log(out, `✅ Ready: ${name}`, "ok");
     }
-    log(out, "DONE! All parts are on your USB. Unplug it and use it on your PS4.", "ok");
     
-  } catch (e) {
-    if (e.name === "AbortError") {
-      log(out, "Cancelled by user.", "err");
-    } else {
-      log(out, `Error: ${e.message}`, "err");
-    }
-  }
+    // Hide loading and show the download card
+    $("loading").style.display = "none";
+    card.style.display = "block";
+    log(out, `DONE! Click the green buttons to download your parts.`, "ok");
+    
+  }, 500); // Wait half a second
 });
