@@ -14,41 +14,43 @@
   <header>
     <div class="logo">📦</div>
     <h1>PKG Splitter</h1>
-    <p class="sub">Split large <code>.pkg</code> files into 4GB parts for your USB. <br>Runs entirely in your browser.</p>
+    <p class="sub">Cut large <code>.pkg</code> files into your custom size.<br>Download parts one by one to your USB.</p>
   </header>
 
   <section class="card">
-    <h2>1 · Select Game File</h2>
+    <h2>1 · Cut the Game</h2>
     
     <div class="input-group file-upload">
       <label for="split-file" class="file-label">
         <span class="file-icon">📁</span>
-        <span id="file-text">Choose a .pkg file or drag it here</span>
+        <span id="file-text">Choose a .pkg file</span>
       </label>
       <input type="file" id="split-file" accept=".pkg">
     </div>
 
     <div class="grid-2">
       <div class="input-group">
-        <label>Output Base Name</label>
+        <label>Output Name</label>
         <input type="text" id="split-name" placeholder="GTA5" autocomplete="off">
       </div>
 
       <div class="input-group">
-        <label>Chunk Size</label>
-        <select id="split-size">
-          <option value="4294967296" selected>4 GiB (FAT32 Safe)</option>
-          <option value="2147483648">2 GiB</option>
-          <option value="1073741824">1 GiB</option>
-        </select>
+        <label>Cut Size (in GB)</label>
+        <input type="number" id="split-size-custom" step="0.1" min="0.1" value="4" placeholder="e.g. 4">
       </div>
     </div>
 
     <button id="split-go" class="btn-primary">
-      <span>Split &amp; Save to USB</span>
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+      <span>Cut File Into Parts</span>
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"></circle><circle cx="6" cy="18" r="3"></circle><line x1="20" y1="4" x2="8.12" y2="15.88"></line><line x1="14.47" y1="14.48" x2="20" y2="20"></line><line x1="8.12" y1="8.12" x2="12" y2="12"></line></svg>
     </button>
 
+    <!-- Loading Bar -->
+    <div id="loading" style="display: none; text-align: center; margin-bottom: 1rem; color: var(--accent); font-weight: bold;">
+      ✂️ Cutting file... please wait...
+    </div>
+
+    <!-- Terminal Log -->
     <div class="terminal">
       <div class="terminal-header">
         <span class="dot red"></span>
@@ -60,17 +62,22 @@
     </div>
   </section>
 
+  <!-- The Download List Area -->
+  <section class="card" id="download-card" style="display: none; margin-top: 1.5rem;">
+    <h2>2 · Download Parts</h2>
+    <p style="color: var(--muted); font-size: 0.9rem; margin-bottom: 1rem;">Click each part to download it to your USB.</p>
+    <div id="download-list" class="download-list"></div>
+  </section>
+
   <footer>
-    <p>Parts are named <code>&lt;name&gt;.pkg.0</code>, <code>.1</code>, … Copy all parts to the USB root.</p>
     <p>Use the <strong>PKG Vault</strong> app on your PS4 to join and install them.</p>
   </footer>
 </main>
 
 <script src="js/split.js"></script>
 <script>
-  // Small script to make the file input look nice when a file is selected
   document.getElementById('split-file').addEventListener('change', function(e) {
-    const fileName = e.target.files[0] ? e.target.files[0].name : "Choose a .pkg file or drag it here";
+    const fileName = e.target.files[0] ? e.target.files[0].name : "Choose a .pkg file";
     document.getElementById('file-text').textContent = fileName;
   });
 </script>
