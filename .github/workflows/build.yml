@@ -13,6 +13,7 @@ env:
   TITLE_ID: BREW00001
   CONTENT_ID: IV0000-BREW00001_00-PKGVAULT00000000
   VERSION: "01.00"
+  EXTRA_CFLAGS: ""
 
 jobs:
   build:
@@ -35,7 +36,7 @@ jobs:
           tar -xzf "$RUNNER_TEMP/tc.tar.gz" --strip-components=2 -C "$TC"
           chmod +x "$TC"/bin/linux/*
           if [ ! -f "$TC/link.x" ]; then
-            echo "link.x missing, tarball layout differs from expected:"
+            echo "link.x missing. File listing:"
             tar -tzf "$RUNNER_TEMP/tc.tar.gz" | head -20
             exit 1
           fi
@@ -48,20 +49,21 @@ jobs:
           [ -f "$SRC" ] || { echo "$SRC not found in repo root"; ls; exit 1; }
 
           clang-18 --target=x86_64-pc-freebsd12-elf -fPIC -funwind-tables -c \
-            -isysroot "$TC" -isystem "$TC/include" "$SRC" -o "$NAME.o" || {
-              echo "--- compile failed. AppInst-related headers:"
-              ls "$TC/include/orbis" | grep -i appinst || true
-              echo "--- install-related declarations:"
+            $EXTRA_CFLAGS -isysroot "$TC" -isystem "$TC/include" "$SRC" -o "$NAME.o" || {
+              echo "--- compile failed. Headers present:"
+              ls "$TC/include/orbis" | grep -i -E "pad|userservice|appinst" || true
               grep -n -i "install" "$TC/include/orbis/AppInstUtil.h" 2>/dev/null | head -40 || true
               exit 1
             }
 
           LIBS="-lc -lkernel"
-          for l in SceSystemService SceAppInstUtil; do
+          NEEDED="ScePad SceUserService"
+          case "$EXTRA_CFLAGS" in *ENABLE_APPINST*) NEEDED="$NEEDED SceAppInstUtil";; esac
+          for l in $NEEDED; do
             if compgen -G "$TC/lib/lib$l.*" > /dev/null; then
               LIBS="$LIBS -l$l"
             else
-              echo "note: stub lib$l not found in $TC/lib, not linking it"
+              echo "ERROR: stub lib$l not found in $TC/lib"; ls "$TC/lib" | head -50; exit 1
             fi
           done
           echo "Linking with: $LIBS"
@@ -78,7 +80,6 @@ jobs:
           set -euo pipefail
           POOL=http://archive.ubuntu.com/ubuntu/pool/main/o/openssl
           DEB=$(curl -fsSL "$POOL/" | grep -oE 'libssl1\.1_[0-9A-Za-z.+~-]+_amd64\.deb' | sort -uV | tail -n1)
-          echo "Using $DEB"
           curl -fsSL -o "$RUNNER_TEMP/libssl.deb" "$POOL/$DEB"
           mkdir -p "$RUNNER_TEMP/libssl11"
           dpkg-deb -x "$RUNNER_TEMP/libssl.deb" "$RUNNER_TEMP/libssl11"
@@ -133,7 +134,6 @@ jobs:
           set_entry TITLE Utf8 128 "$TITLE"
           set_entry TITLE_ID Utf8 12 "$TITLE_ID"
           set_entry VERSION Utf8 8 "$VERSION"
-          od -An -c -N16 "$SFO"
           [ "$(head -c4 "$SFO" | tail -c3)" = "PSF" ] || { echo "param.sfo is missing the PSF magic"; exit 1; }
 
           ( cd pkg && "$BIN/create-gp4" -out pkg.gp4 --content-id="$CONTENT_ID" --files "$FILES" )
