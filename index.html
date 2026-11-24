@@ -3,38 +3,76 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>PKG Splitter</title>
+<title>PKG Splitter - PS4 Vault Tool</title>
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-<header>
-  <h1>PKG Splitter</h1>
-  <p class="sub">Split large <code>.pkg</code> into 4&nbsp;GiB parts. Runs entirely in your browser — nothing uploaded.</p>
-</header>
 
-<section class="card">
-  <h2>1 · Split</h2>
-  <label>Input <code>.pkg</code>
-    <input type="file" id="split-file" accept=".pkg">
-  </label>
-  <label>Output base name
-    <input type="text" id="split-name" placeholder="GRAVITY RUSH 2">
-  </label>
-  <label>Chunk size
-    <select id="split-size">
-      <option value="4294967296" selected>4 GiB (FAT32 safe)</option>
-      <option value="2147483648">2 GiB</option>
-      <option value="1073741824">1 GiB</option>
-    </select>
-  </label>
-  <button id="split-go">Split &amp; download parts</button>
-  <div id="split-log" class="log"></div>
-</section>
+<div class="background-glow"></div>
 
-<footer>
-  <p>Parts are named <code>&lt;name&gt;.pkg.0</code>, <code>.1</code>, … Copy all parts to the USB root. Use the PS4 PKG Vault app to join and install them.</p>
-</footer>
+<main class="container">
+  <header>
+    <div class="logo">📦</div>
+    <h1>PKG Splitter</h1>
+    <p class="sub">Split large <code>.pkg</code> files into 4GB parts for your USB. <br>Runs entirely in your browser.</p>
+  </header>
+
+  <section class="card">
+    <h2>1 · Select Game File</h2>
+    
+    <div class="input-group file-upload">
+      <label for="split-file" class="file-label">
+        <span class="file-icon">📁</span>
+        <span id="file-text">Choose a .pkg file or drag it here</span>
+      </label>
+      <input type="file" id="split-file" accept=".pkg">
+    </div>
+
+    <div class="grid-2">
+      <div class="input-group">
+        <label>Output Base Name</label>
+        <input type="text" id="split-name" placeholder="GTA5" autocomplete="off">
+      </div>
+
+      <div class="input-group">
+        <label>Chunk Size</label>
+        <select id="split-size">
+          <option value="4294967296" selected>4 GiB (FAT32 Safe)</option>
+          <option value="2147483648">2 GiB</option>
+          <option value="1073741824">1 GiB</option>
+        </select>
+      </div>
+    </div>
+
+    <button id="split-go" class="btn-primary">
+      <span>Split &amp; Save to USB</span>
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+    </button>
+
+    <div class="terminal">
+      <div class="terminal-header">
+        <span class="dot red"></span>
+        <span class="dot yellow"></span>
+        <span class="dot green"></span>
+        <span class="terminal-title">output.log</span>
+      </div>
+      <div id="split-log" class="log"></div>
+    </div>
+  </section>
+
+  <footer>
+    <p>Parts are named <code>&lt;name&gt;.pkg.0</code>, <code>.1</code>, … Copy all parts to the USB root.</p>
+    <p>Use the <strong>PKG Vault</strong> app on your PS4 to join and install them.</p>
+  </footer>
+</main>
 
 <script src="js/split.js"></script>
+<script>
+  // Small script to make the file input look nice when a file is selected
+  document.getElementById('split-file').addEventListener('change', function(e) {
+    const fileName = e.target.files[0] ? e.target.files[0].name : "Choose a .pkg file or drag it here";
+    document.getElementById('file-text').textContent = fileName;
+  });
+</script>
 </body>
 </html>
