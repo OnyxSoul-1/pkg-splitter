@@ -3,7 +3,7 @@
  * Copies split PKG parts from a USB drive to the PS4, joins them on the
  * console and (optionally) installs the game. Controlled with the PS4 pad.
  *
- * Made by OnyxSoul-1 - built with Claude and DeepSeek
+ * Made by OnyxSoul-1 - built with Claude and DeepSeek and zai
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -21,7 +21,7 @@
 
 /* ---- names shown inside the app (change them here) ---- */
 #define APP_NAME "PKG Vault"
-#define CREDITS  "By OnyxSoul-1  |  Built with Claude and DeepSeek"
+#define CREDITS  "By OnyxSoul-1  |  Built with Claude and DeepSeek and zai"
 
 #define VAULT_DIR "/data/pkg_vault/"
 #define FINAL_PKG "/data/pkg_vault/FULL_GAME.pkg"
@@ -40,7 +40,16 @@
 
 /* ---- system functions declared here with asm labels, so they cannot
         clash with whatever the toolchain headers say ---- */
-typedef struct { char unused[45]; char message[3075]; } notify_req_t;
+/* Fixed: canonical OrbisNotificationRequest layout (3344 bytes total).
+   Old layout was 3120 bytes with message at offset 45, which wrote the
+   message text into the middle of what the kernel reads as iconPath. */
+typedef struct {
+    unsigned int type;       /* offset 0  */
+    unsigned int unk;        /* offset 4  */
+    unsigned int useIcon;    /* offset 8  */
+    char         iconPath[256]; /* offset 12 */
+    char         message[3072]; /* offset 268 */
+} notify_req_t;
 extern int notify_send(int dev, notify_req_t *req, size_t size, int blocking)
     __asm__("sceKernelSendNotificationRequest");
 extern int vo_open(int user, int type, int index, const void *param)
@@ -194,6 +203,9 @@ static void log_line(const char *m) {
 static void notify(const char *msg) {
     static notify_req_t req;
     memset(&req, 0, sizeof(req));
+    req.type    = 0;            /* simple text notification */
+    req.useIcon = 0;            /* no icon */
+    req.iconPath[0] = 0;        /* empty icon path */
     strncpy(req.message, msg, sizeof(req.message) - 1);
     notify_send(0, &req, sizeof(req), 0);
 }
@@ -234,9 +246,8 @@ static void fill_rect(int x, int y, int w, int h, unsigned int c) {
     if (x + w > W) w = W - x;
     if (y + h > H) h = H - y;
     if (w <= 0 || h <= 0) return;
-    unsigned int *b = fb[back];
-    for (int j = 0; j < h; j++) {
-        unsigned int *row = b + (size_t)(y + j) * W + x;
+    for (int r = 0; r < h; r++) {
+        unsigned int *row = fb[back] + (y + r) * W + x;
         for (int i = 0; i < w; i++) row[i] = c;
     }
 }
@@ -291,7 +302,9 @@ static void refresh_state(void) {
     }
     qsort(vault_parts, vault_count, sizeof(part_t), cmp_part);
 
-    /* look at /mnt/usb0 .. /mnt/usb7, prefer the first one that has parts */
+    /* look at /mnt/usb0 .. /mnt/usb7, prefer the first one that has parts.
+       Defensive: skip bogus dirent entries so a flaky USB filesystem
+       cannot crash the whole app. */
     usb_dir[0] = 0;
     usb_count = 0;
     for (int i = 0; i < 8; i++) {
@@ -301,7 +314,10 @@ static void refresh_state(void) {
         if (!u) continue;
         int cnt = 0;
         struct dirent *e;
-        while ((e = readdir(u)) != NULL) if (is_part(e->d_name)) cnt++;
+        while ((e = readdir(u)) != NULL) {
+            if (!e->d_name || !e->d_name[0]) continue;   /* skip bogus entries */
+            if (is_part(e->d_name)) cnt++;
+        }
         closedir(u);
         if (cnt > 0) { snprintf(usb_dir, sizeof(usb_dir), "%s", p); usb_count = cnt; break; }
         if (!usb_dir[0]) snprintf(usb_dir, sizeof(usb_dir), "%s", p);
