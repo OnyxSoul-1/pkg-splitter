@@ -180,6 +180,9 @@ The right side of the screen shows:
 - Built with **Claude** (Anthropic) and **DeepSeek**.
 - [OpenOrbis PS4 Toolchain](https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain) and LibOrbisPkg tools.
 
+## My try
+soo the usb is like bug ineed to fix too i add you can use too things the ps4 xpla... idk the name ok and my app, and you use that app to not my i mean that copy the files and but in the pkg s or v.. is big name not tall only the name app on the ps4 and than you but you go to your own and paste the files one by one and than done and than you join and done game do you know my game ??  ((is Ghost of ...))
+
 ## Disclaimer
 
 This is homebrew software, made for **personal use with content you own**. It comes **without any warranty**. You use it at your own risk. This project is not made by or connected to Sony.
