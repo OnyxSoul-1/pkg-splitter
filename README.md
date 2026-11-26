@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="icon0.png" alt="PKG SV" width="100%">
+</p>
+
 # PKG Splitter + PKG Vault
 
 Move a **big PS4 game PKG** (for example 40 GB) onto a PS4 using a **small USB drive** (for example 8 GB), one piece at a time.
